@@ -54,6 +54,7 @@ export interface UserData {
   wrongQuestions: Question[];
   customQuestions: Question[];
   deletedQuestionIds: string[]; // 已删除的题目ID
+  questionOverrides?: Record<string, Question>; // 题目覆盖（用于编辑系统题目）
   ranking: RankingEntry[];
   userName: string;
   charErrors: CharErrorStat[];

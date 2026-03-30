@@ -45,17 +45,7 @@ export default function Game() {
     return content
   }
   
-  // 获取提示文字
-  const getHintText = (question: any): string => {
-    if (!showHint) return ''
-    // 显示部首或笔画提示
-    if (question.char) {
-      return `提示：部首"${question.char}"相关`
-    }
-    return ''
-  }
-  
-  // 倒计时相关
+  // 倒计时相关状态
   const [countdown, setCountdown] = useState<number | null>(null)
   const [showCountdownAlert, setShowCountdownAlert] = useState(false)
   const [alertMessage, setAlertMessage] = useState('')
@@ -80,6 +70,9 @@ export default function Game() {
   // 监听键盘事件 - 支持Enter键提交答案和继续下一题
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
+      // 如果没有当前题目，不处理
+      if (!question) return
+      
       // 答案显示后，按Enter继续下一题
       if (showResult && e.key === 'Enter') {
         handleNext()

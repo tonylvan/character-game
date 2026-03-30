@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getUserData, saveUserData, resetUserData, getCharErrorRanking, setWrongCharFrequency, resetCharErrorOrder, getAllQuestions, setPinyinDifficulty, setShowHint } from '../utils/storage'
+import { getUserData, saveUserData, resetUserData, getCharErrorRanking, setWrongCharFrequency, setPinyinDifficulty, setShowHint as saveShowHintSetting, getAllQuestions } from '../utils/storage'
 import { Question } from '../types'
 
 export default function ParentalControl() {
@@ -12,28 +12,48 @@ export default function ParentalControl() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [showPassword, setShowPassword] = useState(true)
   const [parentPassword, setParentPassword] = useState('')
+  const [hasCustomPassword, setHasCustomPassword] = useState(false)
   
   const [dailyLimit, setDailyLimit] = useState(userData.parentSettings?.dailyLimit || 30)
   const [gameTime, setGameTime] = useState(userData.parentSettings?.gameTime || 15)
   const [wrongCharFreq, setWrongCharFreq] = useState(userData.parentSettings?.wrongCharFrequency || 50)
   const [pinyinDiff, setPinyinDiff] = useState<'easy' | 'medium' | 'hard'>(userData.parentSettings?.pinyinDifficulty || 'easy')
-  const [showHint, setShowHint] = useState(userData.parentSettings?.showHint ?? true)
+  const [showHint, setShowHintState] = useState(userData.parentSettings?.showHint ?? true)
   const [countdownEnabled, setCountdownEnabled] = useState(userData.parentSettings?.countdownEnabled ?? false)
   const [countdownMinutes, setCountdownMinutes] = useState(userData.parentSettings?.countdownMinutes || 10)
   
   const [newPassword, setNewPassword] = useState('')
-  const [vocabList, setVocabList] = useState<Question[]>([])
-  const [newVocab, setNewVocab] = useState({ content: '', answer: '', char: '', type: 'pinyin-to-char' as const })
   const [wrongChar, setWrongChar] = useState({ char: '', pinyin: '', reason: '' })
-  const [selectedGradeSem, setSelectedGradeSem] = useState('1-上册')
+  
+  // 题库管理状态
+  const [showVocabManager, setShowVocabManager] = useState(false)
+  const [filteredQuestions, setFilteredQuestions] = useState<Question[]>([])
+  const [selectedQuestions, setSelectedQuestions] = useState<Set<string>>(new Set())
+  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null)
+  const [filterGrade, setFilterGrade] = useState<string>('all')
+  const [filterUnit, setFilterUnit] = useState<string>('all')
+  const [filterType, setFilterType] = useState<string>('all')
+  const [searchText, setSearchText] = useState('')
+  
+  // 新增题目状态
+  const [newVocab, setNewVocab] = useState<{ content: string; answer: string; char: string; type: 'pinyin-to-char' | 'char-to-pinyin' | 'fill-blank'; options: string }>({ content: '', answer: '', char: '', type: 'pinyin-to-char', options: '' })
+  const [selectedGradeSem, setSelectedGradeSem] = useState('4-下册')
   const [selectedUnit, setSelectedUnit] = useState(1)
 
   useEffect(() => {
     const saved = localStorage.getItem('parent_password')
+    setHasCustomPassword(!!saved)
     if (!saved) {
       setShowPassword(true)
     }
   }, [])
+  
+  // 初始化题目列表
+  useEffect(() => {
+    if (showVocabManager) {
+      filterQuestions()
+    }
+  }, [showVocabManager, filterGrade, filterUnit, filterType, searchText])
 
   const handleLogin = () => {
     const saved = localStorage.getItem('parent_password')
@@ -51,6 +71,7 @@ export default function ParentalControl() {
 
   const resetPassword = () => {
     localStorage.removeItem('parent_password')
+    setHasCustomPassword(false)
     alert('密码已重置为初始密码：123456')
     setIsLoggedIn(false)
     setShowPassword(true)
@@ -72,6 +93,7 @@ export default function ParentalControl() {
     }
     
     localStorage.setItem('parent_password', newPassword)
+    setHasCustomPassword(true)
     alert('密码修改成功！请使用新密码重新登录')
     
     // 强制重新登录验证
@@ -98,7 +120,7 @@ export default function ParentalControl() {
   }
 
   const saveShowHint = () => {
-    setShowHint(showHint)
+    saveShowHintSetting(showHint)
     alert('提示设置已保存')
   }
 
@@ -124,6 +146,7 @@ export default function ParentalControl() {
       alert('请填写完整')
       return
     }
+    
     const newQuestion: Question = {
       id: `custom-${Date.now()}`,
       type: newVocab.type,
@@ -133,20 +156,141 @@ export default function ParentalControl() {
       level: parseInt(selectedGradeSem) || 1,
       grade: selectedGradeSem,
       unit: selectedUnit as any,
+      options: newVocab.type === 'fill-blank' && newVocab.options ? newVocab.options.split(',').map(o => o.trim()) : undefined,
     }
+    
     const updated = { ...userData, customQuestions: [...(userData.customQuestions || []), newQuestion] }
     saveUserData(updated)
-    setVocabList([...vocabList, newQuestion])
-    setNewVocab({ content: '', answer: '', char: '', type: 'pinyin-to-char' })
-    alert('添加成功')
+    setNewVocab({ content: '', answer: '', char: '', type: 'pinyin-to-char', options: '' })
+    alert('添加成功！共 ' + (updated.customQuestions?.length || 0) + ' 道自定义题目')
   }
-
-  const deleteVocab = (id: string) => {
-    if (!confirm('确定删除？')) return
-    const updated = { ...userData, deletedQuestionIds: [...(userData.deletedQuestionIds || []), id] }
+  
+  // 筛选题目
+  const filterQuestions = () => {
+    let result = [...allQuestions]
+    
+    // 按年级筛选
+    if (filterGrade !== 'all') {
+      const gradeNum = parseInt(filterGrade)
+      result = result.filter(q => {
+        const qGrade = typeof q.grade === 'string' ? parseInt(q.grade.split('-')[0]) : q.grade
+        return qGrade === gradeNum
+      })
+    }
+    
+    // 按单元筛选
+    if (filterUnit !== 'all') {
+      const unitNum = parseInt(filterUnit) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+      result = result.filter(q => q.unit === unitNum)
+    }
+    
+    // 按类型筛选
+    if (filterType !== 'all') {
+      result = result.filter(q => q.type === filterType)
+    }
+    
+    // 搜索
+    if (searchText) {
+      const search = searchText.toLowerCase()
+      result = result.filter(q => 
+        q.content?.toLowerCase().includes(search) ||
+        q.answer?.toLowerCase().includes(search) ||
+        q.char?.includes(searchText)
+      )
+    }
+    
+    setFilteredQuestions(result)
+  }
+  
+  // 选择/取消选择题目
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedQuestions)
+    if (newSelected.has(id)) {
+      newSelected.delete(id)
+    } else {
+      newSelected.add(id)
+    }
+    setSelectedQuestions(newSelected)
+  }
+  
+  // 全选/取消全选
+  const toggleSelectAll = () => {
+    if (selectedQuestions.size === filteredQuestions.length) {
+      setSelectedQuestions(new Set())
+    } else {
+      setSelectedQuestions(new Set(filteredQuestions.map(q => q.id)))
+    }
+  }
+  
+  // 删除选中的题目
+  const deleteSelected = () => {
+    if (selectedQuestions.size === 0) {
+      alert('请先选择要删除的题目')
+      return
+    }
+    if (!confirm(`确定删除选中的 ${selectedQuestions.size} 道题目吗？`)) return
+    
+    const data = getUserData()
+    const newDeletedIds = [...(data.deletedQuestionIds || []), ...selectedQuestions]
+    const updated = { ...data, deletedQuestionIds: newDeletedIds }
     saveUserData(updated)
-    setVocabList(vocabList.filter(q => q.id !== id))
-    alert('删除成功')
+    setSelectedQuestions(new Set())
+    filterQuestions()
+    alert('已删除 ' + selectedQuestions.size + ' 道题目')
+  }
+  
+  // 恢复已删除的题目
+  const restoreDeleted = () => {
+    const data = getUserData()
+    if (!data.deletedQuestionIds || data.deletedQuestionIds.length === 0) {
+      alert('没有已删除的题目')
+      return
+    }
+    if (!confirm(`确定恢复 ${data.deletedQuestionIds.length} 道已删除的题目吗？`)) return
+    
+    const updated = { ...data, deletedQuestionIds: [] }
+    saveUserData(updated)
+    filterQuestions()
+    alert('已恢复所有删除的题目')
+  }
+  
+  // 编辑题目
+  const updateQuestion = (question: Question) => {
+    const data = getUserData()
+    
+    // 检查是否是自定义题目
+    const isCustom = question.id.startsWith('custom-')
+    
+    if (isCustom) {
+      // 更新自定义题目
+      const updated = {
+        ...data,
+        customQuestions: data.customQuestions?.map(q => q.id === question.id ? question : q) || []
+      }
+      saveUserData(updated)
+    } else {
+      // 系统题目：创建一个覆盖版本
+      const existingOverrides = data.questionOverrides || {}
+      const updated = {
+        ...data,
+        questionOverrides: { ...existingOverrides, [question.id]: question }
+      }
+      saveUserData(updated)
+    }
+    
+    setEditingQuestion(null)
+    filterQuestions()
+    alert('题目已更新')
+  }
+  
+  // 获取题目类型名称
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case 'fill-blank': return '选字填空'
+      case 'pinyin-to-char': return '拼音写汉字'
+      case 'char-to-pinyin': return '汉字写拼音'
+      default: return type
+    }
   }
 
   const addWrongChar = () => {
@@ -226,7 +370,7 @@ export default function ParentalControl() {
           <h2 style={styles.sectionTitle}>安全设置</h2>
           <div style={styles.formGroup}>
             <label style={styles.label}>修改家长密码</label>
-            <p style={styles.hint}>当前密码状态：{localStorage.getItem('parent_password') ? '已设置自定义密码' : '默认密码 (123456)'}</p>
+            <p style={styles.hint}>当前密码状态：{hasCustomPassword ? '已设置自定义密码' : '默认密码 (123456)'}</p>
             <input 
               type="password" 
               style={styles.input} 
@@ -246,11 +390,11 @@ export default function ParentalControl() {
           <h2 style={styles.sectionTitle}>时间管理</h2>
           <div style={styles.formGroup}>
             <label style={styles.label}>每日游戏时长（分钟）</label>
-            <input type="number" style={styles.input} value={dailyLimit} onChange={(e) => setDailyLimit(e.target.value)} />
+            <input type="number" style={styles.input} value={dailyLimit} onChange={(e) => setDailyLimit(Number(e.target.value))} />
           </div>
           <div style={styles.formGroup}>
             <label style={styles.label}>单次游戏时间（分钟）</label>
-            <input type="number" style={styles.input} value={gameTime} onChange={(e) => setGameTime(e.target.value)} />
+            <input type="number" style={styles.input} value={gameTime} onChange={(e) => setGameTime(Number(e.target.value))} />
           </div>
           <div style={styles.formGroup}>
             <label style={styles.label}>
@@ -261,7 +405,7 @@ export default function ParentalControl() {
           {countdownEnabled && (
             <div style={styles.formGroup}>
               <label style={styles.label}>倒计时时长（分钟）</label>
-              <input type="number" style={styles.input} value={countdownMinutes} onChange={(e) => setCountdownMinutes(e.target.value)} />
+              <input type="number" style={styles.input} value={countdownMinutes} onChange={(e) => setCountdownMinutes(Number(e.target.value))} />
             </div>
           )}
           <button style={styles.btn} onClick={saveSettings}>保存时间设置</button>
@@ -271,7 +415,7 @@ export default function ParentalControl() {
           <h2 style={styles.sectionTitle}>学习设置</h2>
           <div style={styles.formGroup}>
             <label style={styles.label}>错字出现频率（0-100%）</label>
-            <input type="number" style={styles.input} value={wrongCharFreq} onChange={(e) => setWrongCharFreq(e.target.value)} min="0" max="100" />
+            <input type="number" style={styles.input} value={wrongCharFreq} onChange={(e) => setWrongCharFreq(Number(e.target.value))} min="0" max="100" />
             <button style={styles.btn} onClick={saveWrongCharFreq}>保存</button>
           </div>
           <div style={styles.formGroup}>
@@ -285,7 +429,7 @@ export default function ParentalControl() {
           </div>
           <div style={styles.formGroup}>
             <label style={styles.label}>
-              <input type="checkbox" checked={showHint} onChange={(e) => setShowHint(e.target.checked)} />
+              <input type="checkbox" checked={showHint} onChange={(e) => setShowHintState(e.target.checked)} />
               显示提示
             </label>
             <button style={styles.btn} onClick={saveShowHint}>保存</button>
@@ -306,43 +450,193 @@ export default function ParentalControl() {
         </section>
 
         <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>自定义题库</h2>
-          <div style={styles.formGroup}>
-            <label style={styles.label}>年级</label>
-            <select style={styles.input} value={selectedGradeSem} onChange={(e) => setSelectedGradeSem(e.target.value)}>
-              <option value="1-上册">一年级上册</option>
-              <option value="1-下册">一年级下册</option>
-              <option value="2-上册">二年级上册</option>
-              <option value="2-下册">二年级下册</option>
-              <option value="3-上册">三年级上册</option>
-              <option value="3-下册">三年级下册</option>
-              <option value="4-上册">四年级上册</option>
-              <option value="4-下册">四年级下册</option>
-            </select>
+          <h2 style={styles.sectionTitle}>题库管理</h2>
+          <p style={styles.desc}>当前题库共 {allQuestions.length} 道题目（自定义题目：{userData.customQuestions?.length || 0} 道）</p>
+          
+          <div style={styles.btnRow}>
+            <button style={styles.btn} onClick={() => setShowVocabManager(!showVocabManager)}>
+              {showVocabManager ? '收起题库' : '管理题目'}
+            </button>
           </div>
-          <div style={styles.formGroup}>
-            <label style={styles.label}>单元</label>
-            <select style={styles.input} value={selectedUnit} onChange={(e) => setSelectedUnit(parseInt(e.target.value))}>
-              <option value={1}>第一单元</option>
-              <option value={2}>第二单元</option>
-              <option value={3}>第三单元</option>
-              <option value={4}>第四单元</option>
-            </select>
-          </div>
-          <div style={styles.formGroup}>
-            <label style={styles.label}>题目内容</label>
-            <input type="text" style={styles.input} value={newVocab.content} onChange={(e) => setNewVocab({ ...newVocab, content: e.target.value })} placeholder="如：míng tiān" />
-          </div>
-          <div style={styles.formGroup}>
-            <label style={styles.label}>答案</label>
-            <input type="text" style={styles.input} value={newVocab.answer} onChange={(e) => setNewVocab({ ...newVocab, answer: e.target.value })} placeholder="如：明天" />
-          </div>
-          <div style={styles.formGroup}>
-            <label style={styles.label}>汉字</label>
-            <input type="text" style={styles.input} value={newVocab.char} onChange={(e) => setNewVocab({ ...newVocab, char: e.target.value })} placeholder="如：明" />
-          </div>
-          <button style={styles.btn} onClick={addVocab}>添加题目</button>
+          
+          {!showVocabManager && (
+            <>
+              <h3 style={styles.subTitle}>添加新题目</h3>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>题目类型</label>
+                <select style={styles.input} value={newVocab.type} onChange={(e) => setNewVocab({ ...newVocab, type: e.target.value as any })}>
+                  <option value="pinyin-to-char">拼音写汉字</option>
+                  <option value="char-to-pinyin">汉字写拼音</option>
+                  <option value="fill-blank">选字填空</option>
+                </select>
+              </div>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>年级</label>
+                <select style={styles.input} value={selectedGradeSem} onChange={(e) => setSelectedGradeSem(e.target.value)}>
+                  <option value="1-上册">一年级上册</option>
+                  <option value="1-下册">一年级下册</option>
+                  <option value="2-上册">二年级上册</option>
+                  <option value="2-下册">二年级下册</option>
+                  <option value="3-上册">三年级上册</option>
+                  <option value="3-下册">三年级下册</option>
+                  <option value="4-上册">四年级上册</option>
+                  <option value="4-下册">四年级下册</option>
+                </select>
+              </div>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>单元</label>
+                <select style={styles.input} value={selectedUnit} onChange={(e) => setSelectedUnit(parseInt(e.target.value))}>
+                  {[1,2,3,4,5,6,7,8].map(u => <option key={u} value={u}>第{u}单元</option>)}
+                </select>
+              </div>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>题目内容 {newVocab.type === 'pinyin-to-char' ? '(拼音)' : newVocab.type === 'char-to-pinyin' ? '(汉字/词语)' : '(如：_____天)'}</label>
+                <input type="text" style={styles.input} value={newVocab.content} onChange={(e) => setNewVocab({ ...newVocab, content: e.target.value })} placeholder={newVocab.type === 'pinyin-to-char' ? '如：míng tiān' : newVocab.type === 'char-to-pinyin' ? '如：明天' : '如：_____天'} />
+              </div>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>答案</label>
+                <input type="text" style={styles.input} value={newVocab.answer} onChange={(e) => setNewVocab({ ...newVocab, answer: e.target.value })} placeholder={newVocab.type === 'char-to-pinyin' ? '如：míng tiān' : '如：明天'} />
+              </div>
+              {newVocab.type === 'fill-blank' && (
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>选项（用逗号分隔，正确答案放在第一位）</label>
+                  <input type="text" style={styles.input} value={newVocab.options} onChange={(e) => setNewVocab({ ...newVocab, options: e.target.value })} placeholder="如：明,名,鸣,铭" />
+                </div>
+              )}
+              <div style={styles.formGroup}>
+                <label style={styles.label}>重点汉字（可选）</label>
+                <input type="text" style={styles.input} value={newVocab.char} onChange={(e) => setNewVocab({ ...newVocab, char: e.target.value })} placeholder="如：明" />
+              </div>
+              <button style={styles.btn} onClick={addVocab}>添加题目</button>
+            </>
+          )}
+          
+          {showVocabManager && (
+            <>
+              {/* 筛选区域 */}
+              <div style={styles.filterRow}>
+                <select style={styles.filterSelect} value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)}>
+                  <option value="all">全部年级</option>
+                  <option value="1">一年级</option>
+                  <option value="2">二年级</option>
+                  <option value="3">三年级</option>
+                  <option value="4">四年级</option>
+                </select>
+                <select style={styles.filterSelect} value={filterUnit} onChange={(e) => setFilterUnit(e.target.value)}>
+                  <option value="all">全部单元</option>
+                  {[1,2,3,4,5,6,7,8].map(u => <option key={u} value={u.toString()}>第{u}单元</option>)}
+                </select>
+                <select style={styles.filterSelect} value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+                  <option value="all">全部类型</option>
+                  <option value="pinyin-to-char">拼音写汉字</option>
+                  <option value="char-to-pinyin">汉字写拼音</option>
+                  <option value="fill-blank">选字填空</option>
+                </select>
+                <input 
+                  style={styles.filterInput} 
+                  type="text" 
+                  placeholder="搜索..." 
+                  value={searchText} 
+                  onChange={(e) => setSearchText(e.target.value)} 
+                />
+              </div>
+              
+              <p style={styles.hint}>筛选结果：{filteredQuestions.length} 道题目，已选中 {selectedQuestions.size} 道</p>
+              
+              {/* 操作按钮 */}
+              <div style={styles.btnRow}>
+                <button style={styles.btnSmall} onClick={toggleSelectAll}>
+                  {selectedQuestions.size === filteredQuestions.length ? '取消全选' : '全选'}
+                </button>
+                <button style={styles.btnDangerSmall} onClick={deleteSelected} disabled={selectedQuestions.size === 0}>
+                  删除选中 ({selectedQuestions.size})
+                </button>
+                <button style={styles.btnSmall} onClick={restoreDeleted}>
+                  恢复已删除
+                </button>
+              </div>
+              
+              {/* 题目列表 */}
+              <div style={styles.questionList}>
+                {filteredQuestions.slice(0, 50).map(q => (
+                  <div key={q.id} style={{
+                    ...styles.questionItem,
+                    ...(selectedQuestions.has(q.id) ? styles.questionItemSelected : {})
+                  }}>
+                    <input 
+                      type="checkbox" 
+                      checked={selectedQuestions.has(q.id)} 
+                      onChange={() => toggleSelect(q.id)}
+                      style={styles.checkbox}
+                    />
+                    <div style={styles.questionInfo}>
+                      <span style={styles.questionType}>{getTypeLabel(q.type)}</span>
+                      <span style={styles.questionContent}>{q.content}</span>
+                      <span style={styles.questionAnswer}>答案：{q.answer}</span>
+                      {q.grade && <span style={styles.questionMeta}>{q.grade}年级</span>}
+                    </div>
+                    <button 
+                      style={styles.btnEdit} 
+                      onClick={() => setEditingQuestion(q)}
+                    >
+                      编辑
+                    </button>
+                  </div>
+                ))}
+                {filteredQuestions.length > 50 && (
+                  <p style={styles.hint}>仅显示前 50 条，共 {filteredQuestions.length} 条</p>
+                )}
+              </div>
+            </>
+          )}
         </section>
+        
+        {/* 编辑题目弹窗 */}
+        {editingQuestion && (
+          <div style={styles.modal}>
+            <div style={styles.modalContent}>
+              <h3 style={styles.modalTitle}>编辑题目</h3>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>题目内容</label>
+                <input 
+                  style={styles.input} 
+                  value={editingQuestion.content} 
+                  onChange={(e) => setEditingQuestion({ ...editingQuestion, content: e.target.value })}
+                />
+              </div>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>答案</label>
+                <input 
+                  style={styles.input} 
+                  value={editingQuestion.answer} 
+                  onChange={(e) => setEditingQuestion({ ...editingQuestion, answer: e.target.value })}
+                />
+              </div>
+              {editingQuestion.type === 'fill-blank' && (
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>选项（用逗号分隔）</label>
+                  <input 
+                    style={styles.input} 
+                    value={editingQuestion.options?.join(',') || ''} 
+                    onChange={(e) => setEditingQuestion({ ...editingQuestion, options: e.target.value.split(',').map(o => o.trim()) })}
+                  />
+                </div>
+              )}
+              <div style={styles.formGroup}>
+                <label style={styles.label}>重点汉字</label>
+                <input 
+                  style={styles.input} 
+                  value={editingQuestion.char || ''} 
+                  onChange={(e) => setEditingQuestion({ ...editingQuestion, char: e.target.value })}
+                />
+              </div>
+              <div style={styles.btnRow}>
+                <button style={styles.btn} onClick={() => updateQuestion(editingQuestion)}>保存</button>
+                <button style={styles.btnSecondary} onClick={() => setEditingQuestion(null)}>取消</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <section style={styles.section}>
           <h2 style={styles.sectionTitle}>数据管理</h2>
@@ -367,14 +661,33 @@ const styles: { [key: string]: React.CSSProperties } = {
   header: { display: 'flex', alignItems: 'center', padding: '15px', background: '#C83C23', color: 'white', borderRadius: '10px', marginBottom: '20px' },
   backBtn: { background: 'none', border: 'none', color: 'white', fontSize: '20px', cursor: 'pointer', marginRight: '15px' },
   headerTitle: { margin: 0, fontSize: '20px' },
-  content: { maxWidth: '800px', margin: '0 auto' },
+  content: { maxWidth: '900px', margin: '0 auto' },
   section: { background: 'white', padding: '25px', borderRadius: '15px', marginBottom: '20px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' },
   sectionTitle: { color: '#C83C23', borderBottom: '2px solid #C83C23', paddingBottom: '10px', marginBottom: '20px' },
-  subTitle: { color: '#666', marginBottom: '15px' },
+  subTitle: { color: '#666', marginBottom: '15px', marginTop: '20px' },
   formGroup: { marginBottom: '15px' },
   label: { display: 'block', marginBottom: '8px', color: '#333', fontWeight: 'bold' },
   input: { width: '100%', padding: '12px', border: '2px solid #E8D5C4', borderRadius: '8px', fontSize: '16px', marginBottom: '10px', boxSizing: 'border-box' },
   btn: { padding: '12px 25px', background: '#C83C23', color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px', cursor: 'pointer', marginRight: '10px', marginBottom: '10px' },
   btnSecondary: { padding: '12px 25px', background: '#f5f5f5', color: '#333', border: '2px solid #ddd', borderRadius: '8px', fontSize: '16px', cursor: 'pointer', marginRight: '10px', marginBottom: '10px' },
   btnDanger: { padding: '12px 25px', background: '#f44336', color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px', cursor: 'pointer', marginBottom: '10px' },
+  btnRow: { display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '15px' },
+  btnSmall: { padding: '8px 16px', background: '#C83C23', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer' },
+  btnDangerSmall: { padding: '8px 16px', background: '#f44336', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer' },
+  btnEdit: { padding: '6px 12px', background: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' },
+  filterRow: { display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '15px' },
+  filterSelect: { padding: '8px 12px', border: '2px solid #E8D5C4', borderRadius: '6px', fontSize: '14px', minWidth: '100px' },
+  filterInput: { padding: '8px 12px', border: '2px solid #E8D5C4', borderRadius: '6px', fontSize: '14px', flex: 1, minWidth: '150px' },
+  questionList: { maxHeight: '400px', overflowY: 'auto', border: '1px solid #eee', borderRadius: '8px' },
+  questionItem: { display: 'flex', alignItems: 'center', padding: '12px', borderBottom: '1px solid #eee', gap: '10px' },
+  questionItemSelected: { background: '#FFF5F3' },
+  checkbox: { width: '18px', height: '18px', cursor: 'pointer' },
+  questionInfo: { flex: 1, display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' },
+  questionType: { padding: '2px 8px', background: '#E8D5C4', borderRadius: '4px', fontSize: '12px', color: '#666' },
+  questionContent: { fontWeight: 'bold', color: '#333' },
+  questionAnswer: { color: '#4CAF50', fontSize: '14px' },
+  questionMeta: { color: '#888', fontSize: '12px' },
+  modal: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
+  modalContent: { background: 'white', padding: '30px', borderRadius: '15px', maxWidth: '500px', width: '90%', maxHeight: '80vh', overflowY: 'auto' },
+  modalTitle: { color: '#C83C23', marginBottom: '20px' },
 }
