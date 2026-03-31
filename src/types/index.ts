@@ -60,6 +60,12 @@ export interface UserData {
   charErrors: CharErrorStat[];
   favorites: string[];
   achievements: string[]; // 已解锁的成就ID列表
+  achievementUnlocks?: Record<string, string>; // 成就ID -> 解锁时间 ISO string
+  checkins?: CheckinRecord[]; // 签到记录
+  checkinStreak?: number; // 连续签到天数
+  lastCheckinDate?: string; // 最后签到日期 YYYY-MM-DD
+  totalQuestionsCorrect?: number; // 累计答对题数
+  maxStreak?: number; // 最大连续答对数
   exp: number; // 经验值
   // 家长管控设置
   parentSettings: {
@@ -90,6 +96,35 @@ export interface RankingEntry {
   date: string;
 }
 
+// 成就条件类型
+export interface AchievementCondition {
+  type: 'questions_correct' | 'streak' | 'total_score' | 'checkin_streak' | 'level';
+  value: number;
+}
+
+// 成就定义
+export interface Achievement {
+  id: string;
+  name: string;
+  desc: string;
+  icon: string;
+  category: 'game' | 'score' | 'checkin' | 'level';
+  condition: AchievementCondition;
+  unlocked?: boolean; // 可选的状态标记
+}
+
+// 已解锁成就记录
+export interface UnlockedAchievement {
+  id: string;
+  unlockedAt: string; // ISO date string
+}
+
+// 签到记录
+export interface CheckinRecord {
+  date: string; // YYYY-MM-DD
+  timestamp: string; // ISO date string
+}
+
 export interface GameState {
   score: number;
   level: number;
@@ -105,6 +140,13 @@ export interface GameState {
   selectedGrade: GradeLevel; // 当前选择的年级
   selectedUnit: UnitNumber; // 当前选择的单元
   usedQuestionIds: string[]; // 已出现的题目ID（防止重复）
+  totalQuestionsCorrect: number; // 累计答对题数
+  maxStreak: number; // 最大连续答对数
+}
+
+export interface AchievementUnlockResult {
+  unlocked: Achievement[];
+  newlyUnlocked: Achievement[];
 }
 
 export type GameAction =
@@ -119,3 +161,25 @@ export type GameAction =
   | { type: 'LEVEL_UP' }
   | { type: 'GAME_OVER' }
   | { type: 'RESET_GAME' };
+
+// 签到记录
+export interface SignInRecord {
+  date: string; // ISO date string (YYYY-MM-DD)
+  reward: number; // 获得的积分
+  streakAtSign: number; // 签到时的连续天数
+}
+
+// 签到数据
+export interface SignInData {
+  lastSignInDate: string | null; // 最后签到日期 (YYYY-MM-DD)
+  consecutiveDays: number; // 连续签到天数
+  totalDays: number; // 累计签到天数
+  records: SignInRecord[]; // 签到记录
+}
+
+// 签到奖励配置
+export interface SignInReward {
+  streakDays: number;
+  bonusPoints: number;
+  label: string;
+}

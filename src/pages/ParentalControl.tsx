@@ -7,7 +7,9 @@ export default function ParentalControl() {
   const navigate = useNavigate()
   const userData = getUserData()
   const errorRanking = getCharErrorRanking()
-  const allQuestions = getAllQuestions()
+  
+  // 🔧 修复：使用 state 存储题目列表，确保删除后能更新
+  const [allQuestions, setAllQuestions] = useState<Question[]>(getAllQuestions())
   
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [showPassword, setShowPassword] = useState(true)
@@ -165,9 +167,11 @@ export default function ParentalControl() {
     alert('添加成功！共 ' + (updated.customQuestions?.length || 0) + ' 道自定义题目')
   }
   
-  // 筛选题目
+  // 筛选题目 - 每次都重新获取最新数据以确保删除生效
   const filterQuestions = () => {
-    let result = [...allQuestions]
+    // 🔧 修复：每次筛选时重新获取最新题目列表（包含最新的删除状态）
+    const latestQuestions = getAllQuestions()
+    let result = [...latestQuestions]
     
     // 按年级筛选
     if (filterGrade !== 'all') {
@@ -234,6 +238,9 @@ export default function ParentalControl() {
     const newDeletedIds = [...(data.deletedQuestionIds || []), ...selectedQuestions]
     const updated = { ...data, deletedQuestionIds: newDeletedIds }
     saveUserData(updated)
+    
+    // 🔧 修复：更新题目列表 state，确保 UI 显示最新数据
+    setAllQuestions(getAllQuestions())
     setSelectedQuestions(new Set())
     filterQuestions()
     alert('已删除 ' + selectedQuestions.size + ' 道题目')
@@ -250,6 +257,9 @@ export default function ParentalControl() {
     
     const updated = { ...data, deletedQuestionIds: [] }
     saveUserData(updated)
+    
+    // 🔧 修复：更新题目列表 state
+    setAllQuestions(getAllQuestions())
     filterQuestions()
     alert('已恢复所有删除的题目')
   }
@@ -278,6 +288,8 @@ export default function ParentalControl() {
       saveUserData(updated)
     }
     
+    // 🔧 修复：更新题目列表 state
+    setAllQuestions(getAllQuestions())
     setEditingQuestion(null)
     filterQuestions()
     alert('题目已更新')

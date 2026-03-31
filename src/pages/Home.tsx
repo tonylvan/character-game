@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useGame, QUESTION_CATEGORIES, GRADE_LEVELS, UNIT_NUMBERS } from '../context/GameContext'
-import { getRanking } from '../utils/storage'
+import { getRanking, hasSignedInToday, getConsecutiveDays } from '../utils/storage'
 import { QuestionCategory, GradeLevel, UnitNumber } from '../types'
 import ThemeSelector from '../components/ThemeSelector'
 
@@ -12,6 +12,8 @@ export default function Home() {
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [showGradeModal, setShowGradeModal] = useState(false)
   const [showUnitModal, setShowUnitModal] = useState(false)
+  const hasSigned = hasSignedInToday()
+  const consecutiveDays = getConsecutiveDays()
 
   const handleStart = () => {
     startGame()
@@ -44,6 +46,23 @@ export default function Home() {
       <h1 style={styles.title}>汉字闯关</h1>
       <p style={styles.subtitle}>学汉字，讲故事，闯关卡</p>
       
+      {/* 签到入口 */}
+      <div style={styles.signInBanner} onClick={() => navigate('/signin')}>
+        <div style={styles.signInIcon}>📅</div>
+        <div style={styles.signInContent}>
+          <div style={styles.signInTitle}>
+            {hasSigned ? '今日已签到' : '每日签到'}
+          </div>
+          <div style={styles.signInDesc}>
+            {hasSigned 
+              ? `连续签到 ${consecutiveDays} 天，明天继续！` 
+              : `连续签到 ${consecutiveDays} 天，点击签到领积分`}
+          </div>
+        </div>
+        {!hasSigned && <div style={styles.signInBadge}>签到</div>}
+        {hasSigned && <div style={styles.signInBadgeDone}>✓</div>}
+      </div>
+
       <div style={styles.stats}>
         <div style={styles.statItem}>
           <span style={styles.statLabel}>当前关卡</span>
@@ -96,6 +115,9 @@ export default function Home() {
         </button>
         <button style={styles.menuButton} onClick={() => navigate('/wrong-words')}>
           📚 错题本
+        </button>
+        <button style={styles.menuButton} onClick={() => navigate('/achievements')}>
+          🏆 成就徽章
         </button>
         <button style={styles.menuButton} onClick={() => navigate('/handwriting')}>
           ✍️ 手写白板
@@ -249,7 +271,52 @@ const styles: { [key: string]: React.CSSProperties } = {
   subtitle: {
     fontSize: '18px',
     color: '#666',
-    marginBottom: '40px',
+    marginBottom: '20px',
+  },
+  signInBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    background: 'linear-gradient(135deg, #C83C23 0%, #A52A1A 100%)',
+    borderRadius: '15px',
+    padding: '15px 20px',
+    width: '100%',
+    maxWidth: '400px',
+    marginBottom: '20px',
+    cursor: 'pointer',
+    boxShadow: '0 2px 10px rgba(200, 60, 35, 0.3)',
+  },
+  signInIcon: {
+    fontSize: '32px',
+    marginRight: '15px',
+  },
+  signInContent: {
+    flex: 1,
+    textAlign: 'left',
+    color: 'white',
+  },
+  signInTitle: {
+    fontSize: '18px',
+    fontWeight: 'bold',
+  },
+  signInDesc: {
+    fontSize: '14px',
+    opacity: 0.9,
+  },
+  signInBadge: {
+    padding: '5px 15px',
+    background: 'white',
+    color: '#C83C23',
+    borderRadius: '20px',
+    fontSize: '14px',
+    fontWeight: 'bold',
+  },
+  signInBadgeDone: {
+    padding: '5px 15px',
+    background: '#FFD700',
+    color: '#333',
+    borderRadius: '20px',
+    fontSize: '14px',
+    fontWeight: 'bold',
   },
   stats: {
     display: 'flex',

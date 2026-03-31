@@ -78,7 +78,7 @@ const grade4b: Question[] = [
   { id: 'g4b-u2-zc-17', type: 'pinyin-to-char', content: 'bìng zào', answer: '病灶', level: 4, grade: '4-下册', unit: 2, char: '灶' },
   { id: 'g4b-u2-zc-18', type: 'pinyin-to-char', content: 'jù bèi', answer: '具备', level: 4, grade: '4-下册', unit: 2, char: '具' },
   { id: 'g4b-u2-zc-19', type: 'pinyin-to-char', content: 'cái liào', answer: '材料', level: 4, grade: '4-下册', unit: 2, char: '材' },
-  { id: 'g4b-u2-zc-20', type: 'pinyin-to-char', content: 'shēn kè', answer: '深刻', level: 4, grade: '4-下册', unit: 2, char: '深刻' },
+  { id: 'g4b-u2-zc-20', type: 'pinyin-to-char', content: 'shēn kè', answer: '深刻', level: 4, grade: '4-下册', unit: 2, char: '深' },
   
   // 成语填空
   { id: 'g4b-u2-cy-01', type: 'fill-blank', content: '前_____后仰', answer: '俯', options: ['俯', '仰', '倾', '弯'], level: 4, grade: '4-下册', unit: 2, char: '俯' },

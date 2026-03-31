@@ -1,5 +1,5 @@
-import { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { GameState, GameAction, Question, CharStory, QuestionCategory, GradeLevel, UnitNumber } from '../types';
+import { createContext, useContext, useReducer, useEffect, ReactNode, useState } from 'react';
+import { GameState, GameAction, Question, CharStory, QuestionCategory, GradeLevel, UnitNumber, Achievement } from '../types';
 import {
   getUserData,
   saveUserData,
@@ -10,28 +10,15 @@ import {
   getCharErrorRanking,
   getWrongCharFrequency,
   getPinyinDifficulty,
+  checkAndUnlockAchievements,
+  updateQuestionStats,
+  getCheckinStatus,
 } from '../utils/storage';
 import charStories from '../data/charStories';
+import achievementsData from '../data/achievements';
 
-export interface Achievement {
-  id: string;
-  name: string;
-  desc: string;
-  icon: string;
-  unlocked: boolean;
-  condition: (state: GameState) => boolean;
-}
-
-export const ACHIEVEMENTS: Achievement[] = [
-  { id: 'first_correct', name: '首战告捷', desc: '答对第一道题', icon: '🎯', unlocked: false, condition: (s) => s.score >= 10 },
-  { id: 'streak_5', name: '五连击', desc: '连续答对 5 题', icon: '🔥', unlocked: false, condition: (s) => s.streak >= 5 },
-  { id: 'streak_10', name: '十连胜', desc: '连续答对 10 题', icon: '⚡', unlocked: false, condition: (s) => s.streak >= 10 },
-  { id: 'score_100', name: '百分达人', desc: '获得 100 积分', icon: '💯', unlocked: false, condition: (s) => s.score >= 100 },
-  { id: 'level_3', name: '小试牛刀', desc: '通过第 3 关', icon: '🌱', unlocked: false, condition: (s) => s.level >= 3 },
-  { id: 'level_6', name: '渐入佳境', desc: '通过第 6 关', icon: '📚', unlocked: false, condition: (s) => s.level >= 6 },
-  { id: 'no_mistake', name: '零失误', desc: '一关全对', icon: '✨', unlocked: false, condition: (s) => s.isLevelComplete },
-  { id: 'collector', name: '错题收集者', desc: '收集 10 个错字', icon: '📚', unlocked: false, condition: () => getCharErrorRanking().length >= 10 },
-];
+// 导出成就数据供其他组件使用
+export { achievementsData as ACHIEVEMENTS_DATA };
 
 export const QUESTION_CATEGORIES: { value: QuestionCategory; label: string; desc: string }[] = [
   { value: 'all', label: '混合闯关', desc: '所有类型随机出现' },
@@ -83,6 +70,8 @@ const initialState: GameState = {
   selectedGrade: 'all',
   selectedUnit: 'all',
   usedQuestionIds: [],
+  totalQuestionsCorrect: 0,
+  maxStreak: 0,
 };
 
 function parseGrade(gradeStr: string): { grade: number; semester: string } {
@@ -217,7 +206,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     }
     case 'ANSWER_CORRECT': {
       const newScore = state.score + 10 + (state.streak >= 2 ? 5 : 0);
-      return { ...state, score: newScore, streak: state.streak + 1, questionIndex: state.questionIndex + 1 };
+      const newStreak = state.streak + 1;
+      const newTotalCorrect = state.totalQuestionsCorrect + 1;
+      return { ...state, score: newScore, streak: newStreak, questionIndex: state.questionIndex + 1, totalQuestionsCorrect: newTotalCorrect, maxStreak: Math.max(state.maxStreak, newStreak) };
     }
     case 'ANSWER_WRONG': {
       const newLives = state.lives - 1;
@@ -270,19 +261,22 @@ interface GameContextType {
   setGrade: (grade: GradeLevel) => void;
   setUnit: (unit: UnitNumber) => void;
   startGame: () => void;
-  answerCorrect: () => void;
+  answerCorrect: () => Achievement[]; // 返回新解锁的成就
   answerWrong: () => void;
   nextQuestion: () => void;
-  levelUp: () => void;
+  levelUp: () => Achievement[]; // 返回新解锁的成就
   gameOver: () => void;
   resetGame: () => void;
   getStory: (char: string) => CharStory | undefined;
+  newlyUnlockedAchievements: Achievement[]; // 新解锁的成就列表
+  clearNewlyUnlocked: () => void; // 清除新解锁提示
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
 export function GameProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(gameReducer, initialState);
+  const [newlyUnlockedAchievements, setNewlyUnlockedAchievements] = useState<Achievement[]>([]);
 
   useEffect(() => {
     const userData = getUserData();
@@ -293,19 +287,86 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const setGrade = (grade: GradeLevel) => dispatch({ type: 'SET_GRADE', payload: { grade } });
   const setUnit = (unit: UnitNumber) => dispatch({ type: 'SET_UNIT', payload: { unit } });
   const startGame = () => dispatch({ type: 'START_GAME', payload: { question: getQuestionByLevel(state.level, state.selectedCategory, state.selectedGrade, state.selectedUnit) } });
-  const answerCorrect = () => dispatch({ type: 'ANSWER_CORRECT' });
-  const answerWrong = () => dispatch({ type: 'ANSWER_WRONG' });
+  
+  const answerCorrect = (): Achievement[] => {
+    dispatch({ type: 'ANSWER_CORRECT' });
+    // 更新答题统计
+    const userData = getUserData();
+    const newTotalCorrect = (userData.totalQuestionsCorrect || 0) + 1;
+    const newStreak = state.streak + 1;
+    updateQuestionStats(true, newStreak);
+    
+    // 检查成就解锁
+    const checkinStatus = getCheckinStatus();
+    const result = checkAndUnlockAchievements({
+      totalQuestionsCorrect: newTotalCorrect,
+      streak: newStreak,
+      totalScore: state.score + 10 + (state.streak >= 2 ? 5 : 0),
+      level: state.level,
+      checkinStreak: checkinStatus.streak,
+    });
+    
+    if (result.newlyUnlocked.length > 0) {
+      setNewlyUnlockedAchievements(result.newlyUnlocked);
+    }
+    
+    return result.newlyUnlocked;
+  };
+  
+  const answerWrong = () => {
+    dispatch({ type: 'ANSWER_WRONG' });
+    updateQuestionStats(false, 0);
+  };
+  
   const nextQuestion = () => {
     if (state.questionIndex >= state.totalQuestions) dispatch({ type: 'LEVEL_UP' });
     else dispatch({ type: 'NEXT_QUESTION', payload: { question: getQuestionByLevel(state.level, state.selectedCategory, state.selectedGrade, state.selectedUnit, state.usedQuestionIds) } });
   };
-  const levelUp = () => dispatch({ type: 'LEVEL_UP' });
+  
+  const levelUp = (): Achievement[] => {
+    dispatch({ type: 'LEVEL_UP' });
+    const newLevel = state.level + 1;
+    
+    // 检查关卡成就解锁
+    const userData = getUserData();
+    const checkinStatus = getCheckinStatus();
+    const result = checkAndUnlockAchievements({
+      totalQuestionsCorrect: userData.totalQuestionsCorrect || 0,
+      streak: 0,
+      totalScore: userData.score,
+      level: newLevel,
+      checkinStreak: checkinStatus.streak,
+    });
+    
+    if (result.newlyUnlocked.length > 0) {
+      setNewlyUnlockedAchievements(result.newlyUnlocked);
+    }
+    
+    return result.newlyUnlocked;
+  };
+  
   const gameOver = () => dispatch({ type: 'GAME_OVER' });
   const resetGame = () => dispatch({ type: 'RESET_GAME' });
   const getStory = (char: string) => getCharStory(char);
+  const clearNewlyUnlocked = () => setNewlyUnlockedAchievements([]);
 
   return (
-    <GameContext.Provider value={{ state, setCategory, setGrade, setUnit, startGame, answerCorrect, answerWrong, nextQuestion, levelUp, gameOver, resetGame, getStory }}>
+    <GameContext.Provider value={{ 
+      state, 
+      setCategory, 
+      setGrade, 
+      setUnit, 
+      startGame, 
+      answerCorrect, 
+      answerWrong, 
+      nextQuestion, 
+      levelUp, 
+      gameOver, 
+      resetGame, 
+      getStory,
+      newlyUnlockedAchievements,
+      clearNewlyUnlocked,
+    }}>
       {children}
     </GameContext.Provider>
   );

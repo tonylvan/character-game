@@ -11,6 +11,8 @@ import ProgressReport from './pages/ProgressReport'
 import ParentalControl from './pages/ParentalControl'
 import LearnIdioms from './pages/LearnIdioms'
 import LearnPoetry from './pages/LearnPoetry'
+import SignIn from './pages/SignIn'
+import Achievements from './pages/Achievements'
 import { GameProvider } from './context/GameContext'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
 import { useEffect } from 'react'
@@ -57,6 +59,8 @@ function AppContent() {
         <Route path="/handwriting" element={<HandwritingBoard />} />
         <Route path="/progress" element={<ProgressReport />} />
         <Route path="/parent" element={<ParentalControl />} />
+        <Route path="/signin" element={<SignIn />} />
+        <Route path="/achievements" element={<Achievements />} />
       </Routes>
     </>
   )
