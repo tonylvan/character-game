@@ -63,19 +63,21 @@ export default function Game() {
     if (showCanvas && canvasRef.current) {
       const canvas = canvasRef.current
       const rect = canvas.getBoundingClientRect()
-      // 设置canvas实际分辨率为显示大小的2倍，提高识别精度
-      canvas.width = rect.width * 2
-      canvas.height = rect.height * 2
+      // 设置canvas实际分辨率与CSS大小一致（简化坐标计算）
+      canvas.width = rect.width
+      canvas.height = rect.height
       const ctx = canvas.getContext('2d')
       if (ctx) {
-        ctx.scale(2, 2) // 缩放绘图以匹配CSS大小
         ctx.strokeStyle = '#333'
         ctx.lineWidth = 4
         ctx.lineCap = 'round'
         ctx.lineJoin = 'round'
-        // 绘制白色背景
+        // 绘制白色背景和边框
         ctx.fillStyle = '#ffffff'
         ctx.fillRect(0, 0, rect.width, rect.height)
+        ctx.strokeStyle = '#C83C23'
+        ctx.lineWidth = 3
+        ctx.strokeRect(2, 2, rect.width - 4, rect.height - 4)
       }
     }
   }, [showCanvas])
@@ -242,8 +244,6 @@ export default function Game() {
     if (!canvas) return { x: 0, y: 0 }
     
     const rect = canvas.getBoundingClientRect()
-    const scaleX = canvas.width / rect.width
-    const scaleY = canvas.height / rect.height
     
     let clientX: number, clientY: number
     
@@ -256,8 +256,8 @@ export default function Game() {
     }
     
     return {
-      x: (clientX - rect.left) * scaleX,
-      y: (clientY - rect.top) * scaleY
+      x: clientX - rect.left,
+      y: clientY - rect.top
     }
   }
 
@@ -270,14 +270,6 @@ export default function Game() {
     setIsDrawing(true)
     const coords = getCanvasCoords(e)
     setCurrentStroke([coords])
-    
-    // 初始化画布
-    const canvas = canvasRef.current
-    const ctx = canvas?.getContext('2d')
-    if (!ctx || !canvas) return
-    if (strokes.length === 0 && currentStroke.length === 0) {
-      drawGrid(ctx, canvas.width, canvas.height)
-    }
   }
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {

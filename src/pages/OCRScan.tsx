@@ -99,7 +99,7 @@ export default function OCRScan() {
         
         // 去除重复，按顺序保留
         const uniqueChars: string[] = []
-        chineseChars.forEach(char => {
+        chineseChars.forEach((char: string) => {
           if (!uniqueChars.includes(char)) {
             uniqueChars.push(char)
           }
