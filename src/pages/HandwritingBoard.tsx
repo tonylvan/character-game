@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { addCharError, getCharErrorRanking } from '../utils/storage'
-import Tesseract from 'tesseract.js'
+
+// 百度OCR后端服务地址
+const OCR_SERVER_URL = 'http://localhost:5000/api/ocr'
 
 // 手写白板组件
 export default function HandwritingBoard() {
@@ -169,7 +171,7 @@ export default function HandwritingBoard() {
     })
   }
 
-  // 识别笔画 - 使用Tesseract.js OCR
+  // 识别笔画 - 调用百度OCR后端服务
   const recognizeStrokes = async () => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -177,49 +179,34 @@ export default function HandwritingBoard() {
     setErrorLog(['🔍 正在识别，请稍候...'])
     
     try {
-      // 图像预处理
-      const processedCanvas = document.createElement('canvas')
-      processedCanvas.width = canvas.width
-      processedCanvas.height = canvas.height
-      const pCtx = processedCanvas.getContext('2d')
-      if (!pCtx) return
+      // 将canvas转换为base64图片
+      const imageData = canvas.toDataURL('image/png')
       
-      // 绘制原始图像
-      pCtx.drawImage(canvas, 0, 0)
-      const imageData = pCtx.getImageData(0, 0, processedCanvas.width, processedCanvas.height)
-      const data = imageData.data
-      
-      // 二值化处理 - 提高对比度
-      for (let i = 0; i < data.length; i += 4) {
-        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3
-        const threshold = 128
-        const newValue = avg > threshold ? 255 : 0
-        data[i] = newValue
-        data[i + 1] = newValue
-        data[i + 2] = newValue
-      }
-      pCtx.putImageData(imageData, 0, 0)
-      
-      // 添加白色背景
-      pCtx.fillStyle = '#ffffff'
-      pCtx.fillRect(0, 0, processedCanvas.width, processedCanvas.height)
-      pCtx.drawImage(canvas, 0, 0)
-      
-      const result = await Tesseract.recognize(processedCanvas, 'chi_sim', {
-        logger: () => {}
+      // 调用百度OCR后端服务
+      const response = await fetch(OCR_SERVER_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ image: imageData }),
       })
       
-      const text = result.data.text.trim()
-      const chars = text.match(/[\u4e00-\u9fff]/g) || []
+      const result = await response.json()
       
-      if (chars.length > 0) {
-        setRecognizedChars(chars)
-        setErrorLog([`✅ 识别到：${chars.join(' ')}`])
+      if (result.success && result.text) {
+        const chars = result.text.match(/[\u4e00-\u9fff]/g) || []
+        if (chars.length > 0) {
+          setRecognizedChars(chars)
+          setErrorLog([`✅ 识别到：${chars.join(' ')}`])
+        } else {
+          setErrorLog(['⚠️ 未识别到汉字，请书写更清晰'])
+        }
       } else {
-        setErrorLog(['⚠️ 未识别到汉字，请书写清晰或使用文字输入模式'])
+        setErrorLog([`⚠️ ${result.error || '未识别到汉字，请重试'}`])
       }
     } catch (err) {
-      setErrorLog(['❌ 识别失败，请重试'])
+      console.error('OCR识别错误:', err)
+      setErrorLog(['❌ 识别服务连接失败，请确保后端服务运行中 (python ocr_server.py)'])
     }
   }
 

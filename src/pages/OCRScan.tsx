@@ -1,7 +1,9 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Tesseract from 'tesseract.js'
 import { addCharError, getCharErrorRanking } from '../utils/storage'
+
+// 百度OCR后端服务地址
+const OCR_SERVER_URL = 'http://localhost:5000/api/ocr'
 
 export default function OCRScan() {
   const navigate = useNavigate()
@@ -72,44 +74,50 @@ export default function OCRScan() {
     }
   }
 
-  // 处理图片 - OCR 识别
+  // 处理图片 - 调用百度OCR后端服务
   const processImage = async (imageData: string) => {
     setIsProcessing(true)
-    setProgress(0)
+    setProgress(50)
     setErrorLog([])
     
     try {
-      const result = await Tesseract.recognize(imageData, 'chi_sim+eng', {
-        logger: (m) => {
-          if (m.status === 'recognizing text') {
-            setProgress(Math.round(m.progress * 100))
+      // 调用百度OCR后端服务
+      const response = await fetch(OCR_SERVER_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ image: imageData }),
+      })
+      
+      const result = await response.json()
+      setProgress(100)
+      
+      if (result.success && result.text) {
+        // 提取所有汉字
+        const chineseChars = result.text.match(/[\u4e00-\u9fff]/g) || []
+        
+        // 去除重复，按顺序保留
+        const uniqueChars: string[] = []
+        chineseChars.forEach(char => {
+          if (!uniqueChars.includes(char)) {
+            uniqueChars.push(char)
           }
+        })
+        
+        setRecognizedChars(uniqueChars)
+        
+        if (uniqueChars.length > 0) {
+          setErrorLog([`识别到 ${uniqueChars.length} 个汉字`])
+        } else {
+          setErrorLog(['未能识别到汉字，请尝试重新拍摄'])
         }
-      })
-
-      const text = result.data.text
-      // 提取所有汉字
-      const chineseChars = text.match(/[\u4e00-\u9fff]/g) || []
-      
-      // 去除重复，按顺序保留
-      const uniqueChars: string[] = []
-      chineseChars.forEach(char => {
-        if (!uniqueChars.includes(char)) {
-          uniqueChars.push(char)
-        }
-      })
-      
-      setRecognizedChars(uniqueChars)
-      
-      // 记录到错字本（用户确认后）
-      if (uniqueChars.length > 0) {
-        setErrorLog([`识别到 ${uniqueChars.length} 个汉字`])
       } else {
-        setErrorLog(['未能识别到汉字，请尝试重新拍摄'])
+        setErrorLog([result.error || '识别失败，请重试'])
       }
       
     } catch (err) {
-      setErrorLog(['识别失败，请重试'])
+      setErrorLog(['识别服务连接失败，请确保后端服务运行中'])
     }
     
     setIsProcessing(false)
