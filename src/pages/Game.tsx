@@ -213,17 +213,11 @@ export default function Game() {
     if (correct) {
       answerCorrect()
       setShowResult(true)
-      // 答案正确，3秒后自动进入下一题
-      setTimeout(() => {
-        handleNext()
-      }, 3000)
+      // 用户手动点击"继续"进入下一题
     } else {
       answerWrong()
       setShowResult(true)
-      // 答案错误，6秒后自动进入下一题
-      setTimeout(() => {
-        handleNext()
-      }, 6000)
+      // 用户手动点击"继续"进入下一题
     }
   }
 
