@@ -245,7 +245,10 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       userData.score = state.score;
       saveUserData(userData);
       const question = getQuestionByLevel(newLevel, state.selectedCategory, state.selectedGrade, state.selectedUnit);
-      return { ...initialState, level: newLevel, score: state.score, currentQuestion: question, isPlaying: true, selectedCategory: state.selectedCategory, selectedGrade: state.selectedGrade, selectedUnit: state.selectedUnit };
+      if (!question) {
+        return { ...initialState, level: newLevel, score: state.score, currentQuestion: null, isPlaying: true, selectedCategory: state.selectedCategory, selectedGrade: state.selectedGrade, selectedUnit: state.selectedUnit };
+      }
+      return { ...initialState, level: newLevel, score: state.score, currentQuestion: question, isPlaying: true, selectedCategory: state.selectedCategory, selectedGrade: state.selectedGrade, selectedUnit: state.selectedUnit, usedQuestionIds: [question.id] };
     }
     case 'GAME_OVER': {
       const userData = getUserData();
@@ -324,8 +327,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
   };
   
   const nextQuestion = () => {
-    if (state.questionIndex >= state.totalQuestions) dispatch({ type: 'LEVEL_UP' });
-    else dispatch({ type: 'NEXT_QUESTION', payload: { question: getQuestionByLevel(state.level, state.selectedCategory, state.selectedGrade, state.selectedUnit, state.usedQuestionIds) } });
+    if (state.questionIndex >= state.totalQuestions) {
+      dispatch({ type: 'LEVEL_UP' });
+    } else {
+      const question = getQuestionByLevel(state.level, state.selectedCategory, state.selectedGrade, state.selectedUnit, state.usedQuestionIds);
+      dispatch({ type: 'NEXT_QUESTION', payload: { question } });
+    }
   };
   
   const levelUp = (): Achievement[] => {
