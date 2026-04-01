@@ -63,10 +63,12 @@ export default function Game() {
 
   // 题目切换时自动聚焦输入框
   useEffect(() => {
-    if (question && !showResult && inputRef.current) {
+    if (question && !showResult) {
       // 延迟一帧确保DOM已更新
       requestAnimationFrame(() => {
-        inputRef.current?.focus()
+        if (inputRef.current) {
+          inputRef.current.focus()
+        }
       })
     }
   }, [question, showResult])
