@@ -181,11 +181,12 @@ function weightedRandomSelect(questions: Question[]): Question {
   return validQuestions[validQuestions.length - 1];
 }
 
-function getQuestionByLevel(level: number, category: QuestionCategory = 'all', grade: GradeLevel = 'all', unit: UnitNumber = 'all', usedIds: string[] = []): Question {
+function getQuestionByLevel(level: number, category: QuestionCategory = 'all', grade: GradeLevel = 'all', unit: UnitNumber = 'all', usedIds: string[] = []): Question | null {
   const questions = getQuestionsByCategory(category, level, grade, unit, usedIds);
   if (questions.length === 0) {
     let allQuestions = getAllQuestions().filter(q => !usedIds.includes(q.id) && isValidQuestion(q));
     if (allQuestions.length === 0) allQuestions = getAllQuestions().filter(q => isValidQuestion(q));
+    if (allQuestions.length === 0) return null; // 防止返回undefined
     return allQuestions[Math.floor(Math.random() * allQuestions.length)];
   }
   return weightedRandomSelect(questions);
@@ -202,6 +203,10 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case 'SET_UNIT': return { ...state, selectedUnit: action.payload.unit };
     case 'START_GAME': {
       const question = getQuestionByLevel(state.level, state.selectedCategory, state.selectedGrade, state.selectedUnit, []);
+      if (!question) {
+        // 如果没有可用题目，返回初始状态
+        return { ...initialState, isPlaying: true, currentQuestion: null, level: state.level, selectedCategory: state.selectedCategory, selectedGrade: state.selectedGrade, selectedUnit: state.selectedUnit, usedQuestionIds: [] };
+      }
       return { ...initialState, isPlaying: true, currentQuestion: question, level: state.level, selectedCategory: state.selectedCategory, selectedGrade: state.selectedGrade, selectedUnit: state.selectedUnit, usedQuestionIds: [question.id] };
     }
     case 'ANSWER_CORRECT': {
