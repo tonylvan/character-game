@@ -910,7 +910,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   footer: {
     padding: '20px',
     textAlign: 'center',
-    marginTop: '-5px',
+    marginTop: '-55px',
   },
   submitButton: {
     fontSize: '20px',
