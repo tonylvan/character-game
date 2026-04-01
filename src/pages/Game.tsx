@@ -58,6 +58,28 @@ export default function Game() {
   const [currentStroke, setCurrentStroke] = useState<{ x: number; y: number }[]>([])
   const [strokes, setStrokes] = useState<{ x: number; y: number }[][]>([])
 
+  // 初始化手写画布 - 设置正确的分辨率
+  useEffect(() => {
+    if (showCanvas && canvasRef.current) {
+      const canvas = canvasRef.current
+      const rect = canvas.getBoundingClientRect()
+      // 设置canvas实际分辨率为显示大小的2倍，提高识别精度
+      canvas.width = rect.width * 2
+      canvas.height = rect.height * 2
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        ctx.scale(2, 2) // 缩放绘图以匹配CSS大小
+        ctx.strokeStyle = '#333'
+        ctx.lineWidth = 4
+        ctx.lineCap = 'round'
+        ctx.lineJoin = 'round'
+        // 绘制白色背景
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, rect.width, rect.height)
+      }
+    }
+  }, [showCanvas])
+
   const question = state.currentQuestion
   const currentCategory = QUESTION_CATEGORIES.find(c => c.value === state.selectedCategory)
 
@@ -370,82 +392,32 @@ export default function Game() {
       // 获取图片Base64
       const dataUrl = canvas.toDataURL('image/png')
       
-      // 1. 尝试调用本地EasyOCR API
-      try {
-        const response = await fetch('http://localhost:5000/api/ocr', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: dataUrl }),
-          signal: AbortSignal.timeout(30000)
-        })
-        
-        if (response.ok) {
-          const result = await response.json()
-          if (result.success && result.text) {
-            setUserAnswer(result.text)
-            setShowCanvas(false)
-            setIsRecognizing(false)
-            return
-          }
+      // 调用百度OCR后端服务
+      const response = await fetch('http://localhost:5000/api/ocr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUrl }),
+        signal: AbortSignal.timeout(30000)
+      })
+      
+      const result = await response.json()
+      
+      if (result.success && result.text) {
+        // 提取第一个汉字
+        const chars = result.text.match(/[\u4e00-\u9fff]/g) || []
+        if (chars.length > 0) {
+          setUserAnswer(chars[0])
+          setShowCanvas(false)
+          setIsRecognizing(false)
+          return
         }
-      } catch (e) {
-        console.log('本地OCR不可用，尝试备用方案...')
       }
       
-      // 2. 使用Tesseract.js备选方案 - 增强版预处理
-      const Tesseract = await import('tesseract.js')
-      
-      // 创建更大的画布进行识别
-      const processedCanvas = document.createElement('canvas')
-      processedCanvas.width = 800
-      processedCanvas.height = 800
-      const pCtx = processedCanvas.getContext('2d')
-      if (!pCtx) return
-      
-      // 居中绘制原始图像，留更大边距
-      pCtx.fillStyle = '#ffffff'
-      pCtx.fillRect(0, 0, 800, 800)
-      pCtx.drawImage(canvas, 100, 100, 600, 600)
-      
-      // 增强图像预处理
-      const imageData = pCtx.getImageData(0, 0, 800, 800)
-      const data = imageData.data
-      
-      // 自适应阈值 + 对比度增强
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i], g = data[i+1], b = data[i+2]
-        // 计算亮度
-        let gray = 0.299 * r + 0.587 * g + 0.114 * b
-        // 对比度增强
-        gray = ((gray - 128) * 1.5) + 128
-        gray = Math.max(0, Math.min(255, gray))
-        // 阈值处理
-        const threshold = gray > 140 ? 255 : 0
-        data[i] = data[i+1] = data[i+2] = threshold
-      }
-      pCtx.putImageData(imageData, 0, 0)
-      
-      // 添加更多白色填充减少边缘噪声
-      pCtx.fillStyle = '#ffffff'
-      pCtx.fillRect(0, 0, 800, 50)
-      pCtx.fillRect(0, 750, 800, 50)
-      pCtx.fillRect(0, 0, 50, 800)
-      pCtx.fillRect(750, 0, 50, 800)
-      
-      const result = await Tesseract.recognize(processedCanvas, 'chi_sim+eng')
-      const text = result.data.text
-      // 提取汉字
-      const chars = text.match(/[\u4e00-\u9fff]/g) || []
-      const firstChar = chars.length > 0 ? chars[0] : ''
-      
-      if (firstChar) {
-        setUserAnswer(firstChar)
-        setShowCanvas(false)
-      } else {
-        alert('未能识别到汉字，请书写更清晰或直接输入')
-      }
+      // 识别失败
+      alert(result.error || '未能识别到汉字，请书写更清晰')
     } catch (err) {
-      alert('识别失败，请重试')
+      console.error('OCR识别错误:', err)
+      alert('识别服务连接失败，请确保后端服务运行中')
     }
     
     setIsRecognizing(false)
@@ -877,7 +849,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   canvas: {
     width: '100%',
-    height: '240px',
+    height: '300px',
     border: '3px solid var(--border-color, #C83C23)',
     borderRadius: '10px',
     cursor: 'crosshair',
