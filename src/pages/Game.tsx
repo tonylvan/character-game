@@ -59,6 +59,17 @@ export default function Game() {
   const [strokes, setStrokes] = useState<{ x: number; y: number }[][]>([])
   const autoNextTimerRef = useRef<NodeJS.Timeout | null>(null)
   const userActiveRef = useRef(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // 题目切换时自动聚焦输入框
+  useEffect(() => {
+    if (question && !showResult && inputRef.current) {
+      // 延迟一帧确保DOM已更新
+      requestAnimationFrame(() => {
+        inputRef.current?.focus()
+      })
+    }
+  }, [question, showResult])
 
   // 初始化手写画布 - 设置正确的分辨率
   useEffect(() => {
@@ -497,6 +508,7 @@ export default function Game() {
             {/* 输入框和手写按钮 */}
             <div style={styles.inputRow}>
               <input
+                ref={inputRef}
                 type="text"
                 style={{...styles.input, flex: 1}}
                 value={userAnswer}
@@ -559,6 +571,7 @@ export default function Game() {
             <p style={styles.questionLabel}>请写出对应的拼音：</p>
             <p style={styles.char}>{question.content}</p>
             <input
+              ref={inputRef}
               type="text"
               style={styles.input}
               value={userAnswer}
