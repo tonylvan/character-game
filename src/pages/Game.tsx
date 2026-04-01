@@ -57,6 +57,8 @@ export default function Game() {
   const [isRecognizing, setIsRecognizing] = useState(false)
   const [currentStroke, setCurrentStroke] = useState<{ x: number; y: number }[]>([])
   const [strokes, setStrokes] = useState<{ x: number; y: number }[][]>([])
+  const autoNextTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const userActiveRef = useRef(false)
 
   // 初始化手写画布 - 设置正确的分辨率
   useEffect(() => {
@@ -88,6 +90,12 @@ export default function Game() {
   useEffect(() => {
     if (!state.isPlaying && !state.isGameOver && !state.isLevelComplete) {
       navigate('/')
+    }
+    // 组件卸载时清除定时器
+    return () => {
+      if (autoNextTimerRef.current) {
+        clearTimeout(autoNextTimerRef.current)
+      }
     }
   }, [state.isPlaying, state.isGameOver, state.isLevelComplete, navigate])
 
@@ -124,6 +132,26 @@ export default function Game() {
     window.addEventListener('keydown', handleKeyPress)
     return () => window.removeEventListener('keydown', handleKeyPress)
   }, [showResult, selectedOption, question])
+
+  // 监听用户活动，阻止自动跳转
+  useEffect(() => {
+    if (!showResult) return
+    
+    const markUserActive = () => {
+      userActiveRef.current = true
+    }
+    
+    // 监听用户交互事件
+    window.addEventListener('mousedown', markUserActive)
+    window.addEventListener('touchstart', markUserActive)
+    window.addEventListener('keydown', markUserActive)
+    
+    return () => {
+      window.removeEventListener('mousedown', markUserActive)
+      window.removeEventListener('touchstart', markUserActive)
+      window.removeEventListener('keydown', markUserActive)
+    }
+  }, [showResult])
 
   useEffect(() => {
     if (question && story === null) {
@@ -213,15 +241,32 @@ export default function Game() {
     if (correct) {
       answerCorrect()
       setShowResult(true)
-      // 用户手动点击"继续"进入下一题
+      // 答案正确，3秒后自动进入下一题（如果用户无操作）
+      userActiveRef.current = false
+      autoNextTimerRef.current = setTimeout(() => {
+        if (!userActiveRef.current) {
+          handleNext()
+        }
+      }, 3000)
     } else {
       answerWrong()
       setShowResult(true)
-      // 用户手动点击"继续"进入下一题
+      // 答案错误，6秒后自动进入下一题（如果用户无操作）
+      userActiveRef.current = false
+      autoNextTimerRef.current = setTimeout(() => {
+        if (!userActiveRef.current) {
+          handleNext()
+        }
+      }, 6000)
     }
   }
 
   const handleNext = () => {
+    // 清除自动跳转定时器
+    if (autoNextTimerRef.current) {
+      clearTimeout(autoNextTimerRef.current)
+      autoNextTimerRef.current = null
+    }
     setUserAnswer('')
     setSelectedOption('')
     setShowResult(false)
@@ -229,6 +274,7 @@ export default function Game() {
     setShowCanvas(false)
     setStrokes([])
     setCurrentStroke([])
+    userActiveRef.current = false
     nextQuestion()
   }
 
