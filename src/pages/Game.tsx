@@ -264,8 +264,10 @@ export default function Game() {
   const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    // 手写时禁止页面滚动
+    // 手写时禁止页面滚动和浏览器手势
     document.body.style.overflow = 'hidden'
+    document.body.style.position = 'fixed' // 额外锁定位置
+    document.body.style.width = '100%'
     document.documentElement.style.overflow = 'hidden'
     setIsDrawing(true)
     const coords = getCanvasCoords(e)
@@ -275,6 +277,7 @@ export default function Game() {
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
     if (!isDrawing) return
     e.preventDefault()
+    e.stopPropagation() // 阻止事件冒泡，防止浏览器手势
     const coords = getCanvasCoords(e)
     
     const canvas = canvasRef.current
@@ -304,6 +307,8 @@ export default function Game() {
     }
     // 恢复页面滚动
     document.body.style.overflow = ''
+    document.body.style.position = ''
+    document.body.style.width = ''
     document.documentElement.style.overflow = ''
     if (!isDrawing) return
     setIsDrawing(false)
@@ -473,8 +478,6 @@ export default function Game() {
               <div style={styles.canvasWrapper}>
                 <canvas
                   ref={canvasRef}
-                  width={350}
-                  height={120}
                   style={styles.canvas}
                   onMouseDown={(e) => startDrawing(e)}
                   onMouseMove={(e) => draw(e)}
@@ -483,6 +486,8 @@ export default function Game() {
                   onTouchStart={(e) => startDrawing(e)}
                   onTouchMove={(e) => draw(e)}
                   onTouchEnd={(e) => endDrawing(e)}
+                  onContextMenu={(e) => e.preventDefault()}
+                  onWheel={(e) => e.preventDefault()}
                 />
                 <div style={styles.canvasActions}>
                   <button 
@@ -838,6 +843,9 @@ const styles: { [key: string]: React.CSSProperties } = {
     padding: '15px',
     marginBottom: '15px',
     marginTop: '10px',
+    touchAction: 'none' as any,
+    overscrollBehavior: 'none' as any,
+    overflow: 'hidden',
   },
   canvas: {
     width: '100%',
@@ -850,6 +858,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     touchAction: 'none' as any,
     userSelect: 'none' as any,
     overscrollBehavior: 'none' as any,
+    WebkitUserSelect: 'none' as any,
+    WebkitTouchCallout: 'none' as any,
   },
   canvasActions: {
     display: 'flex',
