@@ -2,8 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { addCharError, getCharErrorRanking } from '../utils/storage'
 
-// 百度OCR后端服务地址
-const OCR_SERVER_URL = 'http://localhost:5000/api/ocr'
+// 百度OCR后端服务地址（使用服务器IP地址，支持局域网访问）
+const OCR_SERVER_URL = 'http://192.168.1.113:5000/api/ocr'
 
 // 手写白板组件
 export default function HandwritingBoard() {

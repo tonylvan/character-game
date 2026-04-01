@@ -384,8 +384,8 @@ export default function Game() {
       // 获取图片Base64
       const dataUrl = canvas.toDataURL('image/png')
       
-      // 调用百度OCR后端服务
-      const response = await fetch('http://localhost:5000/api/ocr', {
+      // 调用百度OCR后端服务（使用服务器IP地址，支持局域网访问）
+      const response = await fetch('http://192.168.1.113:5000/api/ocr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: dataUrl }),
