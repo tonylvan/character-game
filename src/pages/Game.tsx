@@ -61,18 +61,6 @@ export default function Game() {
   const userActiveRef = useRef(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // 题目切换时自动聚焦输入框
-  useEffect(() => {
-    if (question && !showResult) {
-      // 延迟一帧确保DOM已更新
-      requestAnimationFrame(() => {
-        if (inputRef.current) {
-          inputRef.current.focus()
-        }
-      })
-    }
-  }, [question, showResult])
-
   // 初始化手写画布 - 设置正确的分辨率
   useEffect(() => {
     if (showCanvas && canvasRef.current) {
@@ -99,6 +87,18 @@ export default function Game() {
 
   const question = state.currentQuestion
   const currentCategory = QUESTION_CATEGORIES.find(c => c.value === state.selectedCategory)
+
+  // 题目切换时自动聚焦输入框
+  useEffect(() => {
+    if (question && !showResult) {
+      // 延迟一帧确保DOM已更新
+      requestAnimationFrame(() => {
+        if (inputRef.current) {
+          inputRef.current.focus()
+        }
+      })
+    }
+  }, [question, showResult])
 
   useEffect(() => {
     if (!state.isPlaying && !state.isGameOver && !state.isLevelComplete) {
