@@ -133,14 +133,14 @@ def health_check():
 if __name__ == '__main__':
     print("=" * 50)
     print("  汉字识别服务 - 百度OCR API")
-    print("  访问地址: http://localhost:5000")
+    print("  访问地址: http://localhost:9005")
     print("=" * 50)
     
     # 预先测试连接
     token = get_access_token()
     if token:
-        print("  ✅ 百度OCR API 连接成功")
+        print("  [OK] 百度OCR API 连接成功")
     else:
-        print("  ❌ 百度OCR API 连接失败")
+        print("  [ERROR] 百度OCR API 连接失败")
     
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=9005, debug=True)

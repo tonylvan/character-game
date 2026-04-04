@@ -443,7 +443,7 @@ export default function Game() {
       const dataUrl = canvas.toDataURL('image/png')
       
       // 调用百度OCR后端服务（使用服务器IP地址，支持局域网访问）
-      const response = await fetch('http://192.168.1.113:5000/api/ocr', {
+      const response = await fetch('http://192.168.1.113:9005/api/ocr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: dataUrl }),
